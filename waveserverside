@@ -1,0 +1,23 @@
+local startTime = os.clock()
+
+local syncClient = game.ReplicatedStorage.waveSync.syncClient
+local syncServer = game.ReplicatedStorage.waveSync.syncServer
+
+-- Services
+local collection_service = game:GetService("CollectionService")
+
+local drift_script = script.drift
+
+for i, part in pairs(game.Workspace.Floaters:GetChildren()) do
+	
+	local cloned_script = drift_script:Clone()
+	cloned_script.Parent = part
+	cloned_script.Enabled = true
+end
+
+
+while true do
+	syncClient:FireAllClients(startTime)
+	syncServer:Fire(startTime)
+	task.wait(1)
+end
