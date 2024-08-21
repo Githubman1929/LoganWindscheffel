@@ -1,0 +1,128 @@
+local front = script.Parent
+
+--left
+local left_front = Vector3.new(front.Size.X/2, -script.Parent.Size.Y/2, front.Size.Z/2)
+local left_back = Vector3.new(front.Size.X/2, -script.Parent.Size.Y/2, -front.Size.Z/2)
+
+-- right
+local right_front = Vector3.new(-front.Size.X/2, -script.Parent.Size.Y/2, front.Size.Z/2)
+local right_back = Vector3.new(-front.Size.X/2, -script.Parent.Size.Y/2, -front.Size.Z/2)
+
+local attachments = {
+	attach_left_front = Instance.new("Attachment"),
+	attach_left_back = Instance.new("Attachment"),
+	attach_right_front = Instance.new("Attachment"),
+	attach_right_back = Instance.new("Attachment")
+}
+
+
+-- setting parent and forces
+for _, attach in attachments do
+	attach.Parent = script.Parent
+end
+
+-- setting position
+attachments.attach_left_front.Position = left_front
+attachments.attach_left_back.Position = left_back
+attachments.attach_right_front.Position = right_front
+attachments.attach_right_back.Position = right_back
+
+-- Creating physics thingies
+local staticAttachment = Instance.new("Attachment")
+staticAttachment.Position = Vector3.new(0,-script.Parent.Size.Y/2,0)
+staticAttachment.Parent = script.Parent
+
+local AlignOrientation = Instance.new("AlignOrientation")
+AlignOrientation.Parent = script.Parent
+AlignOrientation.Mode = Enum.OrientationAlignmentMode.OneAttachment
+AlignOrientation.Attachment0 = staticAttachment
+AlignOrientation.ReactionTorqueEnabled = true
+AlignOrientation.RigidityEnabled = true
+AlignOrientation.Responsiveness = 200
+AlignOrientation.MaxTorque = 100000000
+
+local AlignPosition = Instance.new("AlignPosition")
+AlignPosition.Parent = script.Parent
+AlignPosition.Mode = Enum.PositionAlignmentMode.OneAttachment
+AlignPosition.Attachment0 = staticAttachment
+AlignPosition.ReactionForceEnabled = true
+AlignPosition.RigidityEnabled = true
+AlignPosition.Responsiveness = 200
+AlignPosition.MaxForce = 100000000
+
+-- Setting timing
+local startTime = os.clock()
+
+function gerstnerWaveCustom(x, y, t)
+
+	local F = game.ReplicatedStorage.waveSync:WaitForChild("Frequency").Value
+	local D = game.ReplicatedStorage.waveSync:WaitForChild("Direction").Value
+	local A = game.ReplicatedStorage.waveSync:WaitForChild("Amplitude").Value
+
+	-- Getting the x and z position of the bone relative to the center of the plane
+	local x0 = math.cos(F * x-t)+x
+	local z0 = math.cos(F * y-t)+y
+
+	-- y0 is for the x direction
+	local x1 = A * math.sin((F * x0) * D.X - t)
+	x1 += A * math.sin((F * x0) * D.X - t) + 0.4
+
+	local z1 = A * math.sin((F * z0) * D.Z - t)
+	z1 += A * math.sin((F * z0) * D.Z - t) - 0.4
+
+	-- adding the two directions together to get the wave height at the specific bone
+	return Vector3.new(x1, x1+z1, z1)
+end
+
+game.ReplicatedStorage.waveSync.syncServer.Event:Connect(function(syncedStartTime)
+	startTime = syncedStartTime
+end)
+
+
+local startPos = Vector3.new(script.Parent.Position.X,-script.Parent.Size.Y/8,script.Parent.Position.Z)
+
+game:GetService("RunService").Heartbeat:Connect(function()
+	
+	local D = game.ReplicatedStorage.waveSync:WaitForChild("Direction").Value
+	local S = game.ReplicatedStorage.waveSync.Speed.Value
+	local Tuning = game.ReplicatedStorage.waveSync.Tuning.Value
+	
+	local deltaTime = os.clock() - startTime
+	deltaTime *= S
+	
+	-- Position
+	local offset = gerstnerWaveCustom(script.Parent.Position.X,script.Parent.Position.Z, deltaTime)
+	
+	startPos += Vector3.new(D.X/60*S, 0, D.Z/60*S) -- drift
+	
+	AlignPosition.Position = startPos + offset
+	
+	-- Take the four attachments and get angle between them
+	local leftFrontPos = attachments.attach_left_front.WorldPosition
+	local leftBackPos = attachments.attach_left_back.WorldPosition
+	local rightFrontPos = attachments.attach_right_front.WorldPosition
+	local rightBackPos = attachments.attach_right_back.WorldPosition
+	
+	-- Getting the position of the wave at the attachment
+	local offset_front_left = gerstnerWaveCustom(leftFrontPos.X,leftFrontPos.Z, deltaTime)
+	local offset_front_right = gerstnerWaveCustom(rightFrontPos.X,rightFrontPos.Z, deltaTime)
+	
+	local offset_back_left = gerstnerWaveCustom(leftBackPos.X,leftBackPos.Z, deltaTime)
+	local offset_back_right = gerstnerWaveCustom(rightBackPos.X,rightBackPos.Z, deltaTime)
+	
+	--local xRot = -math.rad(((offset_front_left.Y-offset_back_left.Y)+(offset_front_right.Y-offset_back_right.Y))/(script.Parent.Size.Z/4))
+	--local zRot = math.rad(((offset_front_left.Y-offset_front_right.Y)+(offset_back_left.Y-offset_back_right.Y))/(script.Parent.Size.X/4))
+	
+	local xRot = -math.rad(((offset_front_left.Y-offset_back_left.Y)+(offset_front_right.Y-offset_back_right.Y)
+		+(offset_front_left.Z-offset_back_left.Z)+(offset_front_right.Z-offset_back_right.Z)
+		)/script.Parent.Size.Z*Tuning)
+	
+	local zRot = math.rad(((offset_front_left.Y-offset_front_right.Y)+(offset_back_left.Y-offset_back_right.Y)
+		+(offset_front_left.X-offset_front_right.X)+(offset_back_left.X-offset_back_right.X)
+		)/script.Parent.Size.X*Tuning)
+	
+	AlignOrientation.CFrame = CFrame.Angles(xRot,math.rad(script:GetAttribute("rot")),zRot)
+	
+end)
+
+script.Parent.Anchored = false
