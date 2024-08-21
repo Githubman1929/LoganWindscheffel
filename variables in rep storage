@@ -1,0 +1,10 @@
+local folder = game.ReplicatedStorage.waveSync
+
+local amplitude = folder.Amplitude
+local Direction = folder.Direction
+local Frequency = folder.Frequency
+local Speed = folder.Speed
+local Tuning = folder.Tuning
+
+local syncclientevent = folder.syncClient
+local syncserverevent = folder.syncServer
