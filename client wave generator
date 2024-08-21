@@ -1,0 +1,102 @@
+-- Using Gerstner Wave function to animate plane
+
+local plane = script.Parent:WaitForChild("Plane")
+
+local bones = plane:GetChildren()
+table.sort(bones, function(a,b) return a.Name < b.Name end)
+
+-- Using Gerstner Wave function to animate plane
+
+local startTime = os.clock() -- logs starting time
+
+-- random varibles below are to be randomly selected - can be changed
+local random1 = 4.58
+local random2 = 2.157
+
+local random3 = 1.5
+local random4 = 2.5
+
+local maxHeight = 0
+
+
+
+local playerService = game:GetService("Players")
+
+local localPlayer = playerService.LocalPlayer
+
+-- wait for player to load in
+while not localPlayer.Character do
+	wait(1)
+end
+
+local charModel = localPlayer.Character
+
+local charStartPos = charModel.PrimaryPart.Position
+
+local deltaTime = 0
+
+-- functions
+-- Below syncs time across clients
+if game.ReplicatedStorage:WaitForChild("waveSync") then
+
+	game.ReplicatedStorage.waveSync:WaitForChild("syncClient").OnClientEvent:Connect(function(syncedStartTime)
+		startTime = syncedStartTime
+	end)
+end
+
+while true do
+
+	function gerstnerWaveCustom(x, y, t)
+
+		local F = game.ReplicatedStorage.waveSync:WaitForChild("Frequency").Value
+		local D = game.ReplicatedStorage.waveSync:WaitForChild("Direction").Value
+		local A = game.ReplicatedStorage.waveSync:WaitForChild("Amplitude").Value
+
+		-- Getting the x and z position of the bone relative to the center of the plane
+		local x0 = math.cos(F * x-t)+x
+		local z0 = math.cos(F * y-t)+y
+
+		-- y0 is for the x direction
+		local x1 = A * math.sin((F * x0) * D.X - t)
+		x1 += A * math.sin((F * x0) * D.X - t) + 0.4
+
+		local z1 = A * math.sin((F * z0) * D.Z - t)
+		z1 += A * math.sin((F * z0) * D.Z - t) - 0.4
+
+		-- adding the two directions together to get the wave height at the specific bone
+		return Vector3.new(x1, x1+z1, z1)
+	end
+
+	local charOffset = charModel.PrimaryPart.Position - charStartPos
+
+	-- Keeps mesh under player, charOffset is here to keep the player in the middle of the player, charOffset may be broken - do not put here
+	plane.Position = (Vector3.new(charModel:GetPivot().Position.X,  0, charModel:GetPivot().Position.Z))
+
+	deltaTime = os.clock() - startTime -- Gets the difference in time from the start of the script
+
+	deltaTime *= game.ReplicatedStorage.waveSync.Speed.Value
+
+	-- Two lines below are for animating the texture
+
+	local offsetX = game.ReplicatedStorage.waveSync.Direction.Value.X * deltaTime * script:GetAttribute("Speed")
+	local offsetY = game.ReplicatedStorage.waveSync.Direction.Value.Z * deltaTime * script:GetAttribute("Speed")
+
+
+	-- Getting the x and z position of the bone relative to the center of the plane
+	
+	for key, value in bones do
+
+		if value:IsA("Bone") then -- avoiding errors with the texture
+			
+			local worldPos = value.WorldPosition
+			
+			local returned = gerstnerWaveCustom(worldPos.X, worldPos.Z, deltaTime)
+			
+			local vector = CFrame.new(returned.X, returned.Y, returned.Z)
+
+			value.Transform = vector
+		end
+	end
+
+	task.wait()
+end
